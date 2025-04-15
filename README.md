@@ -68,7 +68,7 @@ Once your virtual environment is activated, install the dependencies:
 # Clone the repository
 git clone https://github.com/angrysky56/synth_thalamus.git
 cd synth_thalamus
-### Setting up a Virtual Environment
+```
 
 It's recommended to use a virtual environment to avoid conflicts with other projects:
 
