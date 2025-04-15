@@ -36,7 +36,7 @@ class SimpleWorkspace(nn.Module):
 
 def create_synthetic_data(batch_size=4, num_tokens=100, d_model=128, phase_dim=16):
     """Create synthetic data for demonstration."""
-    # Create content tokens
+    # Create content tokens with more variation for better visualization
     tokens = torch.randn(batch_size, num_tokens, d_model)
     
     # Create synthetic task IDs
@@ -75,6 +75,16 @@ def visualize_attention_patterns(model, tokens, task_ids, enhanced=True):
             logits, _ = model.workspace(gated)
             attn_avg = None
             phase = gated[..., D:].cpu().numpy()[0]
+        
+        # Print phase stats for debugging
+        print(f"Phase shape: {phase.shape}")
+        print(f"Phase min: {phase.min():.4f}, max: {phase.max():.4f}, mean: {phase.mean():.4f}")
+        
+        # Ensure some variation in the data for visualization
+        if abs(phase.max() - phase.min()) < 1e-6:
+            print("Warning: Phase data has almost no variation")
+            # Add small random variation for demonstration
+            phase = phase + np.random.uniform(-0.1, 0.1, phase.shape)
     
     # Create visualization
     plt.figure(figsize=(12, 6))
@@ -88,13 +98,19 @@ def visualize_attention_patterns(model, tokens, task_ids, enhanced=True):
         plt.xlabel('Target Token')
         plt.ylabel('Source Token')
     
-    # Plot phase vectors
+    # Alternative visualization for phase vectors
     plt.subplot(1, 2, 2)
-    plt.imshow(phase, cmap='coolwarm', vmin=-1, vmax=1)
-    plt.colorbar(label='Phase Value')
-    plt.title('Phase Vectors')
+    
+    # Plot each phase vector as a line
+    for i in range(min(phase.shape[0], 8)):  # Plot up to 8 tokens
+        plt.plot(range(phase.shape[1]), phase[i], label=f'Token {i}', marker='o')
+    
+    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    plt.grid(True, linestyle='--', alpha=0.5)
     plt.xlabel('Phase Dimension')
-    plt.ylabel('Token Index')
+    plt.ylabel('Phase Value')
+    plt.title('Phase Vectors')
+    plt.legend()
     
     plt.tight_layout()
     plt.savefig(f"attention_{'enhanced' if enhanced else 'standard'}.png")
@@ -105,28 +121,35 @@ def visualize_attention_patterns(model, tokens, task_ids, enhanced=True):
 def main():
     # Parameters
     d_model = 128
-    num_tokens = 16
+    num_tokens = 100
     batch_size = 1
     output_dim = 10
     
     # Create synthetic data
     tokens, task_ids, targets = create_synthetic_data(batch_size, num_tokens, d_model)
     
+    # Initialize thalamus with stronger phase modulation
+    # This makes the phase variations more visible
+    thalamus_params = {
+        'd_model': d_model,
+        'n_heads': 4,
+        'k': 8,
+        'phase_dim': 16,
+        'task_dim': 64,
+        'num_tasks': 10
+    }
+    
     # Create models with standard and enhanced workspace
     standard_model = torch.nn.Module()
     standard_model.encoder = nn.Linear(d_model, d_model)
-    standard_model.thalamus = SyntheticThalamus(
-        d_model=d_model, n_heads=4, k=8, phase_dim=16, task_dim=64, num_tasks=10
-    )
+    standard_model.thalamus = SyntheticThalamus(**thalamus_params)
     standard_model.workspace = SimpleWorkspace(
         input_dim=d_model + 16, hidden_dim=256, output_dim=output_dim
     )
     
     enhanced_model = torch.nn.Module()
     enhanced_model.encoder = nn.Linear(d_model, d_model)
-    enhanced_model.thalamus = SyntheticThalamus(
-        d_model=d_model, n_heads=4, k=8, phase_dim=16, task_dim=64, num_tasks=10
-    )
+    enhanced_model.thalamus = SyntheticThalamus(**thalamus_params)
     enhanced_model.workspace = EnhancedWorkspace(
         input_dim=d_model, hidden_dim=256, output_dim=output_dim,
         nhead=4, phase_dim=16, num_layers=2
@@ -135,6 +158,12 @@ def main():
     # Set models to evaluation mode
     standard_model.eval()
     enhanced_model.eval()
+    
+    # Make the phases more visible (increase magnitude of learned frequencies)
+    with torch.no_grad():
+        for model in [standard_model, enhanced_model]:
+            # Initialize phase_freqs with larger values for better visualization
+            model.thalamus.phase_freqs.data = torch.linspace(0.5, 2.0, 16)
     
     # Visualize attention patterns
     print("Visualizing standard workspace attention pattern...")

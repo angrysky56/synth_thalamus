@@ -241,6 +241,8 @@ python examples/phase_similarity_demo.py
 
 This will generate visualizations comparing standard and enhanced workspace attention patterns, showing how the phase tags influence attention in the enhanced workspace.
 
+![alt text](image.png)
+
 ## Future Work
 
 The current implementation serves as a foundation for exploring thalamic-inspired neural architectures. Future enhancements may include:
