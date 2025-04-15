@@ -1,0 +1,5 @@
+torch>=2.6.0
+torchvision>=0.17.0
+pytorch-lightning>=2.5.1
+matplotlib>=3.10.1
+numpy>=2.2.4
