@@ -266,6 +266,12 @@ This project was inspired by recent neuroscience research on the role of the tha
 
 The synthetic thalamus implemented here attempts to computationally model some aspects of this biological gating mechanism, particularly the synchronization patterns (implemented as phase tags) that appear to be critical for information to reach conscious awareness.
 
+Reference:
+
+“[Human high-order thalamic nuclei gate conscious perception through the thalamofrontal loop](https://pubmed.ncbi.nlm.nih.gov/40179184/)”
+
+by Zepeng Fang, Yuanyuan Dang, An’an Ping, Chenyu Wang, Qianchuan Zhao, Hulin Zhao, Xiaoli Li and Mingsha Zhang, 4 April 2025, Science.
+
 ## Credits & Acknowledgements
 
 This implementation was created by:
