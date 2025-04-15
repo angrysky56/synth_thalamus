@@ -224,11 +224,12 @@ cd tests
 python test_gating.py
 python test_phase.py
 python test_phase_attention.py
-```
-![image](https://github.com/user-attachments/assets/ccc1285f-d6a0-485d-b8b9-f284d2c453f1)
 
+```
 
 The `test_phase_attention.py` test verifies that the phase similarity attention bias works as expected, showing how tokens with similar phase values attend more strongly to each other.
+
+![image](https://github.com/user-attachments/assets/ccc1285f-d6a0-485d-b8b9-f284d2c453f1)
 
 ### Demo
 
