@@ -80,28 +80,37 @@ def visualize_attention_patterns(model, tokens, task_ids, enhanced=True):
         print(f"Phase shape: {phase.shape}")
         print(f"Phase min: {phase.min():.4f}, max: {phase.max():.4f}, mean: {phase.mean():.4f}")
         
-        # Ensure some variation in the data for visualization
-        if abs(phase.max() - phase.min()) < 1e-6:
-            print("Warning: Phase data has almost no variation")
-            # Add small random variation for demonstration
-            phase = phase + np.random.uniform(-0.1, 0.1, phase.shape)
+        # Calculate phase similarity matrix to verify diversity
+        phase_tensor = torch.tensor(phase)
+        phase_norm = F.normalize(phase_tensor, p=2, dim=1)
+        similarity = torch.mm(phase_norm, phase_norm.t()).cpu().numpy()
+        # Diagonal should be 1.0 (self-similarity), off-diagonal should be less than 1.0
+        np.fill_diagonal(similarity, 0)  # Zero out diagonal for better visualization
+        print(f"Phase similarity (higher=more similar): min={similarity.min():.4f}, max={similarity.max():.4f}, mean={similarity.mean():.4f}")
     
     # Create visualization
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(15, 10))
     
+    # 2x2 subplot layout
     if attn_avg is not None:
         # Plot attention heatmap
-        plt.subplot(1, 2, 1)
+        plt.subplot(2, 2, 1)
         plt.imshow(attn_avg, cmap='viridis')
         plt.colorbar(label='Attention Weight')
         plt.title('Attention Pattern (Enhanced Workspace)')
         plt.xlabel('Target Token')
         plt.ylabel('Source Token')
     
-    # Alternative visualization for phase vectors
-    plt.subplot(1, 2, 2)
+        # Plot phase similarity matrix
+        plt.subplot(2, 2, 2)
+        plt.imshow(similarity, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.colorbar(label='Cosine Similarity')
+        plt.title('Phase Similarity Between Tokens')
+        plt.xlabel('Token')
+        plt.ylabel('Token')
     
     # Plot each phase vector as a line
+    plt.subplot(2, 2, 3)
     for i in range(min(phase.shape[0], 8)):  # Plot up to 8 tokens
         plt.plot(range(phase.shape[1]), phase[i], label=f'Token {i}', marker='o')
     
@@ -111,6 +120,14 @@ def visualize_attention_patterns(model, tokens, task_ids, enhanced=True):
     plt.ylabel('Phase Value')
     plt.title('Phase Vectors')
     plt.legend()
+    
+    # Plot phase vectors heatmap
+    plt.subplot(2, 2, 4)
+    plt.imshow(phase, cmap='coolwarm', vmin=-1, vmax=1)
+    plt.colorbar(label='Phase Value')
+    plt.title('Phase Vectors Heatmap')
+    plt.xlabel('Phase Dimension')
+    plt.ylabel('Token Index')
     
     plt.tight_layout()
     plt.savefig(f"attention_{'enhanced' if enhanced else 'standard'}.png")
@@ -128,28 +145,40 @@ def main():
     # Create synthetic data
     tokens, task_ids, targets = create_synthetic_data(batch_size, num_tokens, d_model)
     
-    # Initialize thalamus with stronger phase modulation
-    # This makes the phase variations more visible
-    thalamus_params = {
-        'd_model': d_model,
-        'n_heads': 4,
-        'k': 8,
-        'phase_dim': 16,
-        'task_dim': 64,
-        'num_tasks': 10
-    }
+    print("\n=== Demo with LOW phase diversity ===")
+    # Initialize thalamus with low phase diversity
+    thalamus_standard = SyntheticThalamus(
+        d_model=d_model,
+        n_heads=4,
+        k=8,
+        phase_dim=16,
+        task_dim=64,
+        num_tasks=10,
+        phase_diversity=0.1  # Low diversity
+    )
+    
+    # Initialize thalamus with HIGH phase diversity
+    thalamus_enhanced = SyntheticThalamus(
+        d_model=d_model,
+        n_heads=4,
+        k=8,
+        phase_dim=16,
+        task_dim=64,
+        num_tasks=10,
+        phase_diversity=0.8  # High diversity
+    )
     
     # Create models with standard and enhanced workspace
     standard_model = torch.nn.Module()
     standard_model.encoder = nn.Linear(d_model, d_model)
-    standard_model.thalamus = SyntheticThalamus(**thalamus_params)
+    standard_model.thalamus = thalamus_standard
     standard_model.workspace = SimpleWorkspace(
         input_dim=d_model + 16, hidden_dim=256, output_dim=output_dim
     )
     
     enhanced_model = torch.nn.Module()
     enhanced_model.encoder = nn.Linear(d_model, d_model)
-    enhanced_model.thalamus = SyntheticThalamus(**thalamus_params)
+    enhanced_model.thalamus = thalamus_enhanced
     enhanced_model.workspace = EnhancedWorkspace(
         input_dim=d_model, hidden_dim=256, output_dim=output_dim,
         nhead=4, phase_dim=16, num_layers=2
@@ -166,13 +195,13 @@ def main():
             model.thalamus.phase_freqs.data = torch.linspace(0.5, 2.0, 16)
     
     # Visualize attention patterns
-    print("Visualizing standard workspace attention pattern...")
+    print("Visualizing standard workspace (LOW phase diversity)...")
     visualize_attention_patterns(standard_model, tokens, task_ids, enhanced=False)
     
-    print("Visualizing enhanced workspace attention pattern...")
+    print("\nVisualizing enhanced workspace (HIGH phase diversity)...")
     visualize_attention_patterns(enhanced_model, tokens, task_ids, enhanced=True)
     
-    print("Demo complete!")
+    print("\nDemo complete!")
 
 if __name__ == "__main__":
     main()

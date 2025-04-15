@@ -1,4 +1,4 @@
-# Synthetic Thalamus
+# Synthetic Thalamus- work in progress
 
 A neural attention mechanism inspired by the biological thalamus for information filtering and task-modulated processing.
 
@@ -231,9 +231,9 @@ The `test_phase_attention.py` test verifies that the phase similarity attention 
 
 ![image](https://github.com/user-attachments/assets/ccc1285f-d6a0-485d-b8b9-f284d2c453f1)
 
-### Demo
+### Demo-Phase Similarity Attention
 
-To visualize how the phase similarity attention works:
+To visualize how the phase similarity attention works, run the demo script:
 
 ```bash
 python examples/phase_similarity_demo.py
@@ -242,6 +242,14 @@ python examples/phase_similarity_demo.py
 This will generate visualizations comparing standard and enhanced workspace attention patterns, showing how the phase tags influence attention in the enhanced workspace.
 
 ![alt text](image.png)
+
+```bash
+pip3 install ollama
+
+python examples/ollama_phase_demo.py
+```
+
+![alt text](image-1.png)
 
 ## Future Work
 
