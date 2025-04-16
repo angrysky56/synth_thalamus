@@ -223,8 +223,8 @@ def main():
     # Create semantic data using Ollama
     tokens, task_ids, _, token_texts = create_semantic_data(d_model=d_model)
     
-    print("\n=== Demo with semantic tokens from Ollama ===")
-    # Initialize thalamus
+    print("\n=== Demo with semantic tokens and MLP-based phase generator ===")
+    # Initialize thalamus with semantic phase generator
     thalamus_params = {
         'd_model': d_model,
         'n_heads': 4,
@@ -232,10 +232,10 @@ def main():
         'phase_dim': 16,
         'task_dim': 64,
         'num_tasks': 10,
-        'phase_diversity': 0.8  # High diversity
+        'phase_diversity': 2.0  # Higher value for more diversity
     }
     
-    # Create models with enhanced workspace
+    # Create model with enhanced workspace
     enhanced_model = torch.nn.Module()
     enhanced_model.encoder = nn.Identity()  # No need to encode, tokens are already embeddings
     enhanced_model.thalamus = SyntheticThalamus(**thalamus_params)
@@ -247,15 +247,10 @@ def main():
     # Set model to evaluation mode
     enhanced_model.eval()
     
-    # Make the phases more visible (increase magnitude of learned frequencies)
-    with torch.no_grad():
-        # Initialize phase_freqs with larger values for better visualization
-        enhanced_model.thalamus.phase_freqs.data = torch.linspace(0.5, 2.0, 16)
-    
-    # Select top 8 tokens for visualization (the number that will be gated through the thalamus)
+    # Process the first group only (technology words)
     token_labels = token_texts[:8]
     
-    print("\nVisualizing enhanced workspace with semantic tokens...")
+    print("\nVisualizing enhanced workspace with semantic phase generation...")
     visualize_attention_patterns(enhanced_model, tokens, task_ids, token_labels, enhanced=True)
     
     print("\nDemo complete!")

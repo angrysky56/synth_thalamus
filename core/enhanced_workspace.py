@@ -4,7 +4,24 @@ import torch.nn.functional as F
 import math
 
 class PhaseSimilarityTransformerLayer(nn.Module):
-    def __init__(self, d_model, nhead, phase_dim, dropout=0.1):
+    """
+    Transformer layer with phase similarity attention bias.
+    
+    This layer extends the standard transformer attention mechanism by incorporating
+    phase similarity information to bias the attention weights. Tokens with similar
+    phase vectors will attend more strongly to each other.
+    """
+    def __init__(self, d_model, nhead, phase_dim, dropout=0.1, initial_phase_scale=1.0):
+        """
+        Initialize the phase similarity transformer layer.
+        
+        Args:
+            d_model: Dimension of the model (input and output)
+            nhead: Number of attention heads
+            phase_dim: Dimensionality of the phase vectors
+            dropout: Dropout probability for attention weights
+            initial_phase_scale: Initial value for the phase scale parameter
+        """
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
@@ -19,16 +36,21 @@ class PhaseSimilarityTransformerLayer(nn.Module):
         self.out_proj = nn.Linear(d_model, d_model)
         
         # Scale factor for phase bias: a learnable parameter.
-        self.phase_scale = nn.Parameter(torch.tensor(1.0))
+        self.phase_scale = nn.Parameter(torch.tensor(initial_phase_scale))
         self.phase_dim = phase_dim
 
     def forward(self, content, phase):
         """
+        Forward pass through the transformer layer.
+        
         Args:
             content: Tensor [B, k, d_model] (token representations)
             phase: Tensor [B, k, phase_dim] (phase tags for each token)
+        
         Returns:
-            Tensor [B, k, d_model] representing the transformed content.
+            Tuple of:
+            - transformed_content: Tensor [B, k, d_model] representing the transformed content
+            - attn_weights: Tensor [B, nhead, k, k] containing attention weights for visualization
         """
         B, k, d_model = content.shape
 
@@ -70,9 +92,27 @@ class PhaseSimilarityTransformerLayer(nn.Module):
         return out, attn_weights  # Return attention weights for visualization
 
 class EnhancedWorkspace(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, nhead=4, phase_dim=16, num_layers=2):
+    """
+    Enhanced workspace with phase similarity attention.
+    
+    This module processes tokens with their associated phase tags using a stack of
+    phase-aware transformer layers. It leverages phase similarity to bias attention
+    weights, helping the model identify which tokens should be processed together.
+    """
+    def __init__(
+        self, 
+        input_dim, 
+        hidden_dim, 
+        output_dim, 
+        nhead=4, 
+        phase_dim=16, 
+        num_layers=2, 
+        dropout=0.1,
+        activation='relu',
+        initial_phase_scale=1.0
+    ):
         """
-        Workspace network that uses a phase-aware transformer layer.
+        Initialize the enhanced workspace.
         
         Args:
             input_dim: Dimension of the content part (without phase).
@@ -81,22 +121,32 @@ class EnhancedWorkspace(nn.Module):
             nhead: Number of attention heads.
             phase_dim: Dimensionality of phase tags.
             num_layers: Number of transformer layers to stack.
+            dropout: Dropout probability.
+            activation: Activation function for feed-forward network ('relu', 'gelu').
+            initial_phase_scale: Initial value for phase scale parameter.
         """
         super().__init__()
         # The total dimension is input_dim (content) + phase_dim.
         self.d_model = input_dim  # We assume the content projection maintains this dimension.
+        self.phase_dim = phase_dim
         
         # Stack multiple transformer layers
         self.phase_layers = nn.ModuleList([
-            PhaseSimilarityTransformerLayer(self.d_model, nhead, phase_dim, dropout=0.1)
+            PhaseSimilarityTransformerLayer(
+                self.d_model, 
+                nhead, 
+                phase_dim, 
+                dropout=dropout,
+                initial_phase_scale=initial_phase_scale
+            )
             for _ in range(num_layers)
         ])
         
         # Feed-forward network after transformer layers
         self.ffn = nn.Sequential(
             nn.Linear(self.d_model, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.GELU() if activation == 'gelu' else nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_dim, self.d_model)
         )
         
@@ -112,16 +162,21 @@ class EnhancedWorkspace(nn.Module):
 
     def forward(self, x_with_phase):
         """
+        Process input tokens with their phase tags.
+        
         Args:
             x_with_phase: Tensor [B, k, D + phase_dim]
                 where the first D components are content and the remaining are phase.
+        
         Returns:
-            Tuple of (output logits, pooled representation).
+            Tuple of:
+            - output: Tensor [B, output_dim] containing output logits
+            - pooled: Tensor [B, d_model] containing pooled representations
         """
         # Split content and phase
-        content_dim = x_with_phase.size(-1) - 16  # Assume phase_dim is 16
+        content_dim = x_with_phase.size(-1) - self.phase_dim
         content = x_with_phase[..., :content_dim]  # [B, k, content_dim]
-        phase = x_with_phase[..., content_dim:]    # [B, k, 16]
+        phase = x_with_phase[..., content_dim:]    # [B, k, phase_dim]
         
         # Process with phase-aware transformer layers
         self.attention_weights = []

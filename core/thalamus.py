@@ -2,9 +2,45 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from core.phase_generator import EnhancedSemanticPhaseGenerator
+
+# For backward compatibility
+class SemanticPhaseGenerator(nn.Module):
+    def __init__(self, d_model, phase_dim, hidden_dim=64, phase_diversity=1.0):
+        """
+        Maps semantic embeddings to phase vectors.
+        
+        Args:
+            d_model: Dimensionality of the semantic embedding.
+            phase_dim: Desired phase dimensionality.
+            hidden_dim: Number of hidden units in the MLP.
+            phase_diversity: Scaling factor to encourage phase diversity.
+        """
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, phase_dim)
+        )
+        # Additional scaling factor for phase diversity control
+        self.phase_diversity = phase_diversity
+
+    def forward(self, x):
+        """
+        Args:
+            x: Tensor of semantic embeddings with shape [B, k, d_model].
+        Returns:
+            phase: Tensor of shape [B, k, phase_dim] with values in [-1, 1],
+                   modulated by the learned non-linearity.
+        """
+        phase_raw = self.mlp(x)  # [B, k, phase_dim]
+        # Apply a non-linear activation (e.g., scaled tanh) to restrict range and encourage diversity.
+        phase = torch.tanh(phase_raw * self.phase_diversity)
+        return phase
 
 class SyntheticThalamus(nn.Module):
-    def __init__(self, d_model, n_heads=4, k=32, phase_dim=16, task_dim=64, num_tasks=10, phase_diversity=0.5):
+    def __init__(self, d_model, n_heads=4, k=32, phase_dim=16, task_dim=64, num_tasks=10, 
+                 phase_diversity=1.0, hidden_dims=[128, 64], activation='gelu', use_layer_norm=True):
         """
         Args:
             d_model: Dimension of input feature vectors.
@@ -14,6 +50,9 @@ class SyntheticThalamus(nn.Module):
             task_dim: Dimensionality of task conditioning.
             num_tasks: Number of distinct tasks.
             phase_diversity: Controls the amount of variation between token phases (0-1).
+            hidden_dims: List of hidden layer dimensions for phase generator.
+            activation: Activation function type ('gelu', 'leaky_relu', 'silu', 'prelu', 'relu').
+            use_layer_norm: Whether to use layer normalization in phase generator.
         """
         super().__init__()
         self.k = k
@@ -28,13 +67,21 @@ class SyntheticThalamus(nn.Module):
         # Multihead Attention for salience scoring.
         self.scorer = nn.MultiheadAttention(d_model, n_heads, batch_first=True)
 
-        # Phase generator: projects tokens into a phase space.
-        self.phase_proj = nn.Linear(d_model, phase_dim)
-        # Learnable frequency scaling for phase modulation.
-        self.phase_freqs = nn.Parameter(torch.randn(phase_dim) * 0.1)
+        # Use the enhanced phase generator
+        self.phase_generator = EnhancedSemanticPhaseGenerator(
+            d_model=d_model, 
+            phase_dim=phase_dim, 
+            hidden_dims=hidden_dims, 
+            activation=activation,
+            phase_diversity=phase_diversity,
+            use_layer_norm=use_layer_norm
+        )
         
-        # Position-dependent phase offset - adds variation between tokens
-        self.position_proj = nn.Linear(d_model, phase_dim)
+        # For backward compatibility, keep the phase_freqs and phase_proj
+        # These won't be used with the new phase generator but keep them
+        # to avoid breaking existing code that might reference them
+        self.phase_freqs = nn.Parameter(torch.randn(phase_dim) * 0.1)
+        self.phase_proj = nn.Linear(d_model, phase_dim)
 
     def forward(self, x, task_id, context=None):
         """
@@ -67,17 +114,8 @@ class SyntheticThalamus(nn.Module):
         # Gather the corresponding tokens.
         gated = torch.gather(x_attn, 1, topk_indices.unsqueeze(-1).expand(-1, -1, D))
 
-        # Generate phase tags with increased diversity
-        # Base phase projection
-        phase_base = self.phase_proj(gated)
-        
-        # Create position-dependent offsets to increase token variation
-        # This ensures different tokens get different phase patterns
-        position_offsets = self.position_proj(gated) * self.phase_diversity
-        
-        # Apply different starting points for different tokens
-        # Higher phase_diversity = more variation between tokens
-        phase = torch.sin(phase_base * self.phase_freqs + position_offsets)
+        # Generate phase tags directly from the gated semantic content
+        phase = self.phase_generator(gated)  # [B, k, phase_dim]
         
         # Concatenate the original gated token with its phase tag.
         gated = torch.cat([gated, phase], dim=-1)  # [B, k, D + phase_dim]

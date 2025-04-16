@@ -1,4 +1,4 @@
-# Synthetic Thalamus- work in progress
+# Synthetic Thalamus
 
 A neural attention mechanism inspired by the biological thalamus for information filtering and task-modulated processing.
 
@@ -11,6 +11,17 @@ The Synthetic Thalamus is a novel neural network module designed to selectively 
 - **Phase-aware processing** through learned rotary-like embeddings
 - **Modality adapters** for different input types (image, text)
 - **Feedback integration** for salience adjustments based on rewards
+
+### Enhanced Phase Generation
+
+The latest release includes a significantly improved phase generator with:
+
+- **Enhanced MLP Architecture** with configurable depth and width
+- **Multiple Activation Functions** (GELU, Leaky ReLU, SiLU, PReLU)
+- **Layer Normalization** for better gradient flow
+- **Contrastive Learning** to encourage similar phases for semantically related tokens
+- **Phase Diversity Parameter** to control variation between token phases
+- **Analysis Tools** for visualizing and quantifying phase relationships
 
 ## Architecture
 
@@ -45,17 +56,26 @@ This enhanced workspace better utilizes the phase information, enabling:
 synth_thalamus/
 ├── core/
 │   ├── __init__.py
-│   ├── thalamus.py       # SyntheticThalamus module
-│   ├── adapters.py       # Modality-specific encoders
-│   └── feedback.py       # Feedback layer for salience adjustments
+│   ├── thalamus.py         # SyntheticThalamus module
+│   ├── adapters.py         # Modality-specific encoders
+│   ├── feedback.py         # Feedback layer for salience adjustments
+│   ├── enhanced_workspace.py # Phase-aware workspace
+│   ├── phase_generator.py  # Enhanced semantic phase generator
+│   └── visualization.py    # Phase visualization and analysis tools
 ├── examples/
-│   ├── image_clf.ipynb   # Demo for image classification
-│   └── babi_qa.ipynb     # Demo for question answering tasks
+│   ├── image_clf.ipynb     # Demo for image classification
+│   ├── babi_qa.ipynb       # Demo for question answering tasks
+│   ├── phase_similarity_demo.py # Demo for phase similarity attention
+│   ├── ollama_phase_demo.py    # Demo with Ollama embeddings
+│   └── enhanced_phase_demo.py  # Demo for enhanced phase generator
 ├── tests/
-│   ├── test_gating.py    # Unit tests for top-K gating
-│   └── test_phase.py     # Unit tests for phase generation
-├── train.py              # LightningModule-based training entrypoint
-└── README.md             # This file
+│   ├── test_gating.py      # Unit tests for top-K gating
+│   ├── test_phase.py       # Unit tests for phase generation
+│   ├── test_phase_attention.py # Tests for phase similarity attention
+│   └── test_enhanced_phase.py  # Tests for enhanced phase generator
+├── train.py                # LightningModule-based training entrypoint
+├── IMPLEMENTATION_NOTES.md # Detailed implementation notes
+└── README.md               # This file
 ```
 
 ## Installation
@@ -120,14 +140,18 @@ import torch
 from core.thalamus import SyntheticThalamus
 from core.enhanced_workspace import EnhancedWorkspace
 
-# Initialize the thalamus
+# Initialize the thalamus with enhanced phase generator
 thalamus = SyntheticThalamus(
-    d_model=128,    # Token feature dimension
-    n_heads=4,      # Number of attention heads
-    k=16,           # Number of tokens to gate through
-    phase_dim=16,   # Dimensionality of phase tags
-    task_dim=64,    # Dimensionality of task conditioning
-    num_tasks=10    # Number of distinct tasks
+    d_model=128,            # Token feature dimension
+    n_heads=4,              # Number of attention heads
+    k=16,                   # Number of tokens to gate through
+    phase_dim=16,           # Dimensionality of phase tags
+    task_dim=64,            # Dimensionality of task conditioning
+    num_tasks=10,           # Number of distinct tasks
+    phase_diversity=2.0,    # Controls variation between phases
+    hidden_dims=[128, 64],  # Hidden layer dimensions for phase generator
+    activation='gelu',      # Activation function type
+    use_layer_norm=True     # Use layer normalization
 )
 
 # Initialize the enhanced workspace
@@ -137,7 +161,9 @@ workspace = EnhancedWorkspace(
     output_dim=10,       # Output dimension (e.g., number of classes)
     nhead=4,             # Number of attention heads
     phase_dim=16,        # Dimensionality of phase tags
-    num_layers=2         # Number of transformer layers
+    num_layers=2,        # Number of transformer layers
+    activation='gelu',   # Activation function type
+    initial_phase_scale=1.0  # Initial scaling of phase similarity
 )
 
 # Example input: batch of 4 sequences, each with 100 tokens of dimension 128
@@ -157,10 +183,17 @@ print(pooled.shape)     # Output: [4, 128] (batch_size, d_model)
 attention_weights = workspace.attention_weights
 ```
 
-You can also use the demo script to visualize the phase similarity attention:
+You can also use the demo scripts to visualize phase-related functionality:
 
 ```bash
+# Standard phase similarity demo
 python examples/phase_similarity_demo.py
+
+# Demo using Ollama embeddings (requires Ollama installed)
+python examples/ollama_phase_demo.py
+
+# Demo of the enhanced phase generator
+python examples/enhanced_phase_demo.py
 ```
 
 ## Training
@@ -178,6 +211,15 @@ python train.py --max_epochs=10 --gpus=1 --enhanced_workspace
 The enhanced workspace leverages phase similarity to bias attention, potentially leading to better performance on tasks that require temporal binding or feature grouping.
 
 ## Examples
+
+### Enhanced Phase Generator Demo
+
+The `examples/enhanced_phase_demo.py` script demonstrates the capabilities of the enhanced semantic phase generator:
+
+1. **Activation Function Comparison**: Visualizes the impact of different activation functions on phase patterns
+2. **Diversity Parameter Sweep**: Shows how the diversity parameter affects phase variation and similarity
+3. **Network Architecture Analysis**: Compares different MLP architectures for phase generation
+4. **Category Similarity Analysis**: Quantifies how well the phases capture semantic categories
 
 ### Image Classification
 
@@ -205,6 +247,7 @@ The Synthetic Thalamus can be customized in several ways:
 - **Task conditioning**: Use different task embeddings to change attention patterns
 - **Phase embeddings**: Modify phase dimensions to encode different temporal patterns
 - **Scoring mechanism**: Replace the default attention-based scorer with custom logic
+- **Enhanced features**: Configure the phase generator with custom architectures, activation functions, and diversity parameters
 
 ## Applications
 
@@ -224,12 +267,12 @@ cd tests
 python test_gating.py
 python test_phase.py
 python test_phase_attention.py
-
+python test_enhanced_phase.py  # Tests for the enhanced phase generator
 ```
 
 The `test_phase_attention.py` test verifies that the phase similarity attention bias works as expected, showing how tokens with similar phase values attend more strongly to each other.
 
-![image](https://github.com/user-attachments/assets/ccc1285f-d6a0-485d-b8b9-f284d2c453f1)
+![phase attention test](phase_attention_test.png)
 
 ### Demo-Phase Similarity Attention
 
@@ -241,23 +284,29 @@ python examples/phase_similarity_demo.py
 
 This will generate visualizations comparing standard and enhanced workspace attention patterns, showing how the phase tags influence attention in the enhanced workspace.
 
-![alt text](image.png)
+![phase similarity demo](image.png)
+
+### Using with Ollama
+
+For embeddings using Ollama, first install the client:
 
 ```bash
 pip3 install ollama
 ```
 
-# (with mxbai-embed-large or phi4-mini) 
+Then pull a model (e.g., mxbai-embed-large or phi4-mini): 
 
 ```bash
 ollama pull mxbai-embed-large:latest
 ```
 
+Run the Ollama phase demo:
+
 ```bash
 python examples/ollama_phase_demo.py
 ```
 
-![alt text](image-1.png)
+![ollama phase demo](image-1.png)
 
 ## Future Work
 
@@ -276,9 +325,9 @@ The synthetic thalamus implemented here attempts to computationally model some a
 
 Reference:
 
-“[Human high-order thalamic nuclei gate conscious perception through the thalamofrontal loop](https://pubmed.ncbi.nlm.nih.gov/40179184/)”
+"[Human high-order thalamic nuclei gate conscious perception through the thalamofrontal loop](https://pubmed.ncbi.nlm.nih.gov/40179184/)"
 
-by Zepeng Fang, Yuanyuan Dang, An’an Ping, Chenyu Wang, Qianchuan Zhao, Hulin Zhao, Xiaoli Li and Mingsha Zhang, 4 April 2025, Science.
+by Zepeng Fang, Yuanyuan Dang, An'an Ping, Chenyu Wang, Qianchuan Zhao, Hulin Zhao, Xiaoli Li and Mingsha Zhang, 4 April 2025, Science.
 
 ## Credits & Acknowledgements
 
