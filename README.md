@@ -294,7 +294,7 @@ For embeddings using Ollama, first install the client:
 pip3 install ollama
 ```
 
-Then pull a model (e.g., mxbai-embed-large or phi4-mini): 
+Then pull a model (e.g., mxbai-embed-large or phi4-mini):
 
 ```bash
 ollama pull mxbai-embed-large:latest
@@ -339,7 +339,38 @@ The enhanced phase generator now supports contrastive learning to improve semant
 To explore these advanced contrastive learning features, run:
 
 ```bash
-python examples/advanced_contrastive_training.py
+python examples/advanced_contrastive_training.py --no_comparison
+```
+
+```bash
+Epoch 20 Training:  96%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍      | 24/25 [00:01<00:00, 17.03it/s]Phase vectors shape: torch.Size([32, 16, 16])
+Semantic categories shape: torch.Size([32, 16])
+Final shapes: Phase vectors torch.Size([32, 16, 16]), Categories torch.Size([32, 16])
+Similarity shape: torch.Size([32, 16, 16])
+Positive mask shape: torch.Size([32, 16, 16])
+Epoch 20 Training: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 25/25 [00:01<00:00, 17.15it/s]
+Validation: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:00<00:00, 410.52it/s]
+Train loss: 0.4631, Task loss: 0.0004, Contrastive loss: 0.4641
+Contrastive weight: 0.9969, Temperature: 0.1220
+Val loss: 0.0004, Val accuracy: 1.0000
+Model saved to advanced_contrastive_results/model_epoch_20.pt
+Gradient statistics saved to advanced_contrastive_results/grad_stats_epoch_20.png
+
+Training completed in 0.57 minutes
+Phase vectors shape: torch.Size([16, 16])
+Categories shape: torch.Size([32])
+Similarity matrix shape: (16, 16)
+Unique categories: [0 1 2 3]
+Category 0 has 8 tokens
+Category 1 has 8 tokens
+Category 2 has 8 tokens
+Category 3 has 8 tokens
+Phase visualizations (after_training) saved to advanced_contrastive_results
+
+Category Contrast Metrics:
+Before training: -0.0079
+After training:  -0.0010
+Improvement:     0.0068
 ```
 
 ## Future Work
