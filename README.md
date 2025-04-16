@@ -306,7 +306,7 @@ Run the Ollama phase demo:
 python examples/ollama_phase_demo.py
 ```
 
-![ollama phase demo](image-1.png)
+![image](https://github.com/user-attachments/assets/697514a7-5e6e-42b6-b01f-56faefb80b87)
 
 ## Advanced Features
 
