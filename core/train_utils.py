@@ -206,6 +206,12 @@ class ContrastivePhaseTrainer:
                     
                     phases = phase_outputs.get('phases')
                     hook_handle.remove()
+                    
+                    # Ensure categories match phases in size
+                    if phases is not None and categories is not None:
+                        if phases.size(1) != categories.size(1):
+                            # Truncate categories to match phases
+                            categories = categories[:, :phases.size(1)]
             
             # Forward pass for real
             outputs = self.model(x, task_ids) if task_ids is not None else self.model(x)
@@ -428,11 +434,15 @@ class ContrastivePhaseTrainer:
                 
                 # Save gradient statistics if monitoring
                 if self.monitor_gradients:
-                    fig = self.grad_monitor.plot_gradient_stats()
-                    grad_path = os.path.join(save_dir, f"grad_stats_epoch_{epoch+1}.png")
-                    fig.savefig(grad_path)
-                    plt.close(fig)
-                    print(f"Gradient statistics saved to {grad_path}")
+                    try:
+                        import matplotlib.pyplot as plt
+                        fig = self.grad_monitor.plot_gradient_stats()
+                        grad_path = os.path.join(save_dir, f"grad_stats_epoch_{epoch+1}.png")
+                        fig.savefig(grad_path)
+                        plt.close(fig)
+                        print(f"Gradient statistics saved to {grad_path}")
+                    except Exception as e:
+                        print(f"Warning: Could not save gradient statistics: {e}")
         
         end_time = time.time()
         print(f"\nTraining completed in {(end_time - start_time) / 60:.2f} minutes")

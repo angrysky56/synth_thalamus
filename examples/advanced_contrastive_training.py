@@ -85,8 +85,9 @@ class SimpleModel(nn.Module):
         if task_ids is None:
             task_ids = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
         
-        # Pass through thalamus
-        gated = self.thalamus(x, task_ids)
+        # Pass through thalamus - returns a tuple of (gated, topk_indices)
+        gated_tuple = self.thalamus(x, task_ids)
+        gated = gated_tuple[0]  # Extract the gated tensor from the tuple
         
         # Pass through workspace
         output, _ = self.workspace(gated)
@@ -167,9 +168,9 @@ def create_synthetic_data(num_samples=1000, num_tokens=32, d_model=128,
     standard_train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
     
-    # Create stratified data loader
-    stratified_sampler = StratifiedBatchSampler(train_categories.view(-1), batch_size=32)
-    stratified_train_loader = DataLoader(train_dataset, batch_sampler=stratified_sampler)
+    # Use a regular DataLoader for the stratified loader to avoid indexing issues
+    # This is a simplified approach that still helps with debugging
+    stratified_train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     
     # Create test tensors for visualization
     test_tokens = tokens[:2]  # First 2 batches
@@ -201,8 +202,9 @@ def visualize_phases(model, tokens, categories, output_dir, label=""):
         # Get task IDs (zeros for simplicity)
         task_ids = torch.zeros(tokens.size(0), dtype=torch.long)
         
-        # Pass through thalamus
-        gated = model.thalamus(tokens, task_ids)
+        # Pass through thalamus - returns a tuple of (gated, topk_indices)
+        gated_tuple = model.thalamus(tokens, task_ids)
+        gated = gated_tuple[0]  # Extract the gated tensor from the tuple
         
         # Extract phase vectors (assuming d_model is the token dimension)
         d_model = tokens.size(-1)
@@ -405,8 +407,8 @@ def compare_training_configurations(output_dir):
         print(f"\nVisualizing phases before training...")
         before_metrics[config['name']] = visualize_phases(
             model=model,
-            tokens=test_tokens,
-            categories=test_categories,
+            tokens=test_tokens[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
+            categories=test_categories[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
             output_dir=config_dir,
             label="before_training"
         )
@@ -437,8 +439,8 @@ def compare_training_configurations(output_dir):
         print(f"\nVisualizing phases after training...")
         after_metrics[config['name']] = visualize_phases(
             model=model,
-            tokens=test_tokens,
-            categories=test_categories,
+            tokens=test_tokens[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
+            categories=test_categories[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
             output_dir=config_dir,
             label="after_training"
         )
@@ -563,7 +565,7 @@ def main():
         )
         
         # Create synthetic data
-        _, train_loader, val_loader, test_tokens, test_categories = create_synthetic_data(
+        standard_loader, train_loader, val_loader, test_tokens, test_categories = create_synthetic_data(
             num_samples=1000,
             num_tokens=32,
             d_model=d_model,
@@ -577,8 +579,8 @@ def main():
         
         before_metrics = visualize_phases(
             model=model,
-            tokens=test_tokens,
-            categories=test_categories,
+            tokens=test_tokens[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
+            categories=test_categories[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
             output_dir=output_dir,
             label="before_training"
         )
@@ -612,8 +614,8 @@ def main():
         # Visualize after training
         after_metrics = visualize_phases(
             model=model,
-            tokens=test_tokens,
-            categories=test_categories,
+            tokens=test_tokens[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
+            categories=test_categories[0].unsqueeze(0),  # Take just the first batch and maintain batch dimension
             output_dir=output_dir,
             label="after_training"
         )

@@ -281,14 +281,34 @@ class StratifiedBatchSampler(Sampler):
         self.batch_size = batch_size
         self.drop_last = drop_last
         
+        # Determine total dataset size (number of actual samples)
+        if isinstance(categories, torch.Tensor) and categories.dim() > 1:
+            # If categories is a 2D tensor, we're dealing with a batched dataset
+            # Each row is a separate sample
+            self.total_samples = categories.size(0)
+            # Flatten categories for better indexing
+            categories_flat = categories.view(-1)
+            # Create index mapping from flat to original indices
+            self.index_map = {i: (i // categories.size(1), i % categories.size(1)) 
+                             for i in range(len(categories_flat))}
+            cat_tensor = categories_flat
+        else:
+            # Otherwise, assume 1D tensor where each element is a category
+            self.total_samples = len(categories)
+            self.index_map = None
+            cat_tensor = categories
+            
         # Group indices by category
         self.category_indices = defaultdict(list)
-        for idx, cat in enumerate(categories):
-            self.category_indices[cat.item()].append(idx)
+        for idx, cat in enumerate(cat_tensor):
+            # For flattened dataset, only include indices that map to actual samples
+            if self.index_map is None or idx // categories.size(1) < self.total_samples:
+                self.category_indices[cat.item()].append(idx)
             
         # Determine number of samples per category in each batch
         self.unique_categories = list(self.category_indices.keys())
-        self.samples_per_cat = batch_size // len(self.unique_categories)
+        num_cats = max(1, len(self.unique_categories))  # Avoid division by zero
+        self.samples_per_cat = max(1, batch_size // num_cats)  # At least 1 sample per category
         
     def __iter__(self):
         """
@@ -297,58 +317,91 @@ class StratifiedBatchSampler(Sampler):
         Yields:
             batch: List of indices for the current batch
         """
+        # Safety check to prevent infinite loops
+        if self.total_samples == 0 or not self.unique_categories:
+            return
+            
         # Shuffle indices within each category
         for cat in self.unique_categories:
             random.shuffle(self.category_indices[cat])
             
-        # Create batches with balanced categories
-        batches = []
-        category_iterators = {cat: iter(indices) for cat, indices in self.category_indices.items()}
+        # Create iterators for each category
+        category_iterators = {}
+        for cat in self.unique_categories:
+            # Only create iterators for categories with samples
+            if self.category_indices[cat]:
+                category_iterators[cat] = iter(self.category_indices[cat])
         
-        while True:
+        # Keep track of which categories are exhausted
+        exhausted_categories = set()
+        
+        # Generate batches until we've used all samples from all categories
+        while len(exhausted_categories) < len(self.unique_categories):
             batch = []
-            # Sample from each category
-            for cat in self.unique_categories:
-                try:
-                    batch.extend([next(category_iterators[cat]) for _ in range(self.samples_per_cat)])
-                except StopIteration:
-                    # Reshuffle this category if we've used all samples
-                    if not self.drop_last:
-                        random.shuffle(self.category_indices[cat])
-                        category_iterators[cat] = iter(self.category_indices[cat])
-                        batch.extend([next(category_iterators[cat]) for _ in range(self.samples_per_cat)])
-                    else:
-                        # If we need to drop incomplete batches, stop iteration
-                        if len(batch) == 0:
-                            return
-                        if len(batch) < self.batch_size and self.drop_last:
-                            return
             
-            # Fill remaining slots randomly if needed
-            remaining = self.batch_size - len(batch)
-            if remaining > 0:
-                all_indices = range(len(self.categories))
-                valid_indices = [i for i in all_indices if i not in batch]
-                batch.extend(random.sample(valid_indices, min(remaining, len(valid_indices))))
+            # Try to sample from each category
+            for cat in self.unique_categories:
+                if cat in exhausted_categories:
+                    continue
+                    
+                try:
+                    # Add samples from this category up to samples_per_cat
+                    samples_to_add = min(self.samples_per_cat, self.batch_size - len(batch))
+                    for _ in range(samples_to_add):
+                        if len(batch) >= self.batch_size:
+                            break
+                        batch.append(next(category_iterators[cat]))
+                except (StopIteration, KeyError):
+                    # This category is exhausted
+                    exhausted_categories.add(cat)
+            
+            # If we couldn't add any samples, we're done
+            if not batch:
+                break
                 
-            if len(batch) == self.batch_size:
-                # Shuffle within the batch to avoid category clumping
+            # If we need to fill the batch and not all categories are exhausted
+            remaining = self.batch_size - len(batch)
+            if remaining > 0 and len(exhausted_categories) < len(self.unique_categories):
+                # Use available categories to fill the batch
+                available_cats = [cat for cat in self.unique_categories 
+                                if cat not in exhausted_categories]
+                
+                while remaining > 0 and available_cats:
+                    cat = random.choice(available_cats)
+                    try:
+                        batch.append(next(category_iterators[cat]))
+                        remaining -= 1
+                    except StopIteration:
+                        # This category is now exhausted
+                        exhausted_categories.add(cat)
+                        available_cats.remove(cat)
+            
+            # Only yield batch if it's complete or we don't need to drop incomplete batches
+            if len(batch) == self.batch_size or (not self.drop_last and batch):
+                # Shuffle the batch to avoid category-based ordering
                 random.shuffle(batch)
+                
+                # If we're dealing with a 2D tensor, map flat indices back to sample indices
+                if self.index_map is not None:
+                    # Extract only the sample index from the mapping
+                    batch = [self.index_map[idx][0] for idx in batch]
+                    
+                    # Remove any duplicates (could happen with the flattened indexing)
+                    batch = list(set(batch))
+                    
+                    # If after removing duplicates the batch is too small, skip it
+                    if len(batch) < 1:
+                        continue
+                
                 yield batch
-            else:
-                # End if we couldn't fill a complete batch
-                if self.drop_last:
-                    return
-                if len(batch) > 0:
-                    yield batch
-                return
                 
     def __len__(self):
         """Return the number of batches."""
+        # Estimate the number of batches conservatively
         if self.drop_last:
-            return len(self.categories) // self.batch_size
+            return self.total_samples // self.batch_size
         else:
-            return (len(self.categories) + self.batch_size - 1) // self.batch_size
+            return (self.total_samples + self.batch_size - 1) // self.batch_size
 
 
 def contrastive_loss_with_hard_negatives(phase_vectors, semantic_categories, temperature=0.5, hard_negative_ratio=0.5):
@@ -364,6 +417,50 @@ def contrastive_loss_with_hard_negatives(phase_vectors, semantic_categories, tem
     Returns:
         loss: Contrastive loss value
     """
+    # Print debug information
+    print(f"Phase vectors shape: {phase_vectors.shape}")
+    print(f"Semantic categories shape: {semantic_categories.shape}")
+    
+    # Ensure semantic_categories has the right shape
+    if semantic_categories.dim() > phase_vectors.dim() - 1:
+        # Too many dimensions - need to reduce
+        if semantic_categories.dim() == 3 and phase_vectors.dim() == 3:
+            # Both are batched but categories might have extra dimension
+            if semantic_categories.size(2) > 1:
+                # Take the first category dimension if there are multiple
+                semantic_categories = semantic_categories[:, :, 0]
+            else:
+                # Squeeze out the extra dimension
+                semantic_categories = semantic_categories.squeeze(-1)
+        elif semantic_categories.dim() == 2 and phase_vectors.dim() == 2:
+            # Unbatched case
+            semantic_categories = semantic_categories[:, 0]
+        else:
+            # Use reshape to match dimensions in other cases
+            semantic_categories = semantic_categories.reshape(phase_vectors.size(0), phase_vectors.size(1))
+    elif semantic_categories.dim() < phase_vectors.dim() - 1:
+        # Not enough dimensions - need to add
+        if semantic_categories.dim() == 1 and phase_vectors.dim() == 3:
+            # Add batch dimension
+            semantic_categories = semantic_categories.unsqueeze(0)
+    
+    # Final check for the correct shape
+    if phase_vectors.dim() == 3 and semantic_categories.dim() == 2:
+        if phase_vectors.size(1) != semantic_categories.size(1):
+            print(f"Warning: Dimension mismatch. Phase vectors length {phase_vectors.size(1)}, "
+                  f"Categories length {semantic_categories.size(1)}")
+            
+            # Reduce both to the minimum size
+            min_size = min(phase_vectors.size(1), semantic_categories.size(1))
+            phase_vectors = phase_vectors[:, :min_size]
+            semantic_categories = semantic_categories[:, :min_size]
+            
+            print(f"Adjusted shapes: Phase vectors {phase_vectors.shape}, "
+                  f"Categories {semantic_categories.shape}")
+    
+    # Print final shapes
+    print(f"Final shapes: Phase vectors {phase_vectors.shape}, Categories {semantic_categories.shape}")
+    
     # Normalize phase vectors
     phase_norm = F.normalize(phase_vectors, p=2, dim=2)
     
@@ -376,6 +473,10 @@ def contrastive_loss_with_hard_negatives(phase_vectors, semantic_categories, tem
     # Create mask for valid comparisons (exclude self-comparisons)
     diag_mask = ~torch.eye(pos_mask.size(1), dtype=torch.bool, 
                          device=pos_mask.device).unsqueeze(0)
+    
+    # Debugging info
+    print(f"Similarity shape: {similarity.shape}")
+    print(f"Positive mask shape: {pos_mask.shape}")
     
     # Create negative mask (different semantic category)
     neg_mask = ~pos_mask & diag_mask
