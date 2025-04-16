@@ -228,7 +228,7 @@ class RecurrentThalamusWorkspace(nn.Module):
                 inputs_modified = inputs
             
             # Process through thalamus
-            thalamus_output = self.thalamus(inputs_modified, task_ids)
+            thalamus_output, token_indices = self.thalamus(inputs_modified, task_ids)
             
             # Process through workspace
             workspace_output, pooled = self.workspace(thalamus_output)
@@ -236,6 +236,9 @@ class RecurrentThalamusWorkspace(nn.Module):
             # Store intermediate states if requested
             if return_intermediates:
                 intermediates['thalamus_outputs'].append(thalamus_output.detach())
+                if 'token_indices' not in intermediates:
+                    intermediates['token_indices'] = []
+                intermediates['token_indices'].append(token_indices.detach())
                 intermediates['workspace_outputs'].append(workspace_output.detach())
                 
                 # Store feedback gate if available

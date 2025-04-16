@@ -84,7 +84,7 @@ class SimpleModel(nn.Module):
             task_ids = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
         
         # Pass through thalamus
-        gated = self.thalamus(x, task_ids)
+        gated, _ = self.thalamus(x, task_ids)
         
         # Pass through workspace
         output, _ = self.workspace(gated)

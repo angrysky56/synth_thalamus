@@ -60,7 +60,7 @@ class SyntheticThalamusModel(pl.LightningModule):
     def forward(self, x, task_id, context=None):
         # x: [B, N, d_model]
         x_enc = self.encoder(x)
-        gated = self.thalamus(x_enc, task_id, context)
+        gated, _ = self.thalamus(x_enc, task_id, context)
         output, _ = self.workspace(gated)
         return output
 

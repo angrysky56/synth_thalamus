@@ -90,7 +90,8 @@ class SyntheticThalamus(nn.Module):
             task_id: Long tensor of shape [B] containing task identifiers.
             context: Optional tensor [B, M, D] for additional workspace feedback.
         Returns:
-            Tensor of shape [B, k, D + phase_dim] with gated tokens and phase tags.
+            gated: Tensor of shape [B, k, D + phase_dim] with gated tokens and phase tags.
+            indices: Tensor of shape [B, k] containing original indices of selected tokens.
         """
         B, N, D = x.size()
 
@@ -110,7 +111,7 @@ class SyntheticThalamus(nn.Module):
         # Salience scoring: here we take the norm of each token.
         scores = x_attn.norm(dim=-1)  # [B, N]
         # Select the top-k tokens per sample.
-        _, topk_indices = scores.topk(self.k, dim=1)
+        _, topk_indices = scores.topk(self.k, dim=1)  # [B, k]
         # Gather the corresponding tokens.
         gated = torch.gather(x_attn, 1, topk_indices.unsqueeze(-1).expand(-1, -1, D))
 
@@ -119,4 +120,4 @@ class SyntheticThalamus(nn.Module):
         
         # Concatenate the original gated token with its phase tag.
         gated = torch.cat([gated, phase], dim=-1)  # [B, k, D + phase_dim]
-        return gated
+        return gated, topk_indices

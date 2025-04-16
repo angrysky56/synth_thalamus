@@ -125,7 +125,7 @@ def visualize_attention_patterns(model, tokens, task_ids, token_labels, enhanced
         encoded = model.encoder(tokens)
         
         # Apply thalamus
-        gated = model.thalamus(encoded, task_ids)
+        gated, _ = model.thalamus(encoded, task_ids)
         
         # Calculate D (content dimension)
         D = tokens.size(-1)

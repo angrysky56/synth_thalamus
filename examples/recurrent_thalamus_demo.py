@@ -125,7 +125,7 @@ def compare_models(tokens, categories, task_ids, output_dir):
     print("Processing through standard pipeline...")
     with torch.no_grad():
         # Forward through thalamus
-        standard_thalamus_output = standard_thalamus(tokens, task_ids)
+        standard_thalamus_output, standard_indices = standard_thalamus(tokens, task_ids)
         
         # Extract phase vectors for visualization
         standard_phases = standard_thalamus_output[..., d_model:]
@@ -144,6 +144,13 @@ def compare_models(tokens, categories, task_ids, output_dir):
         # Extract phases from last iteration for comparison
         last_thalamus_output = intermediates['thalamus_outputs'][-1]
         recurrent_phases = last_thalamus_output[..., d_model:]
+        
+        # Get the token indices for the last iteration if available
+        if 'token_indices' in intermediates and intermediates['token_indices']:
+            recurrent_indices = intermediates['token_indices'][-1]
+        else:
+            # Fallback if indices aren't available
+            recurrent_indices = standard_indices
     
     # Create output directory if needed
     if not os.path.exists(output_dir):
@@ -170,15 +177,24 @@ def compare_models(tokens, categories, task_ids, output_dir):
     # Compare intra vs inter category similarities
     fig, axes = plt.subplots(1, 2, figsize=(18, 8))
     
+    # Extract the correct categories for the gated tokens using the indices
+    standard_gated_categories = torch.zeros_like(standard_indices)
+    for b in range(standard_indices.shape[0]):
+        standard_gated_categories[b] = torch.gather(categories[b], 0, standard_indices[b])
+    
+    recurrent_gated_categories = torch.zeros_like(recurrent_indices)
+    for b in range(recurrent_indices.shape[0]):
+        recurrent_gated_categories[b] = torch.gather(categories[b], 0, recurrent_indices[b])
+    
     # Standard
     plot_intra_inter_similarity(
-        standard_phases, categories, ax=axes[0],
+        standard_phases, standard_gated_categories, ax=axes[0],
         title="Standard Thalamus Category Similarity"
     )
     
     # Recurrent
     plot_intra_inter_similarity(
-        recurrent_phases, categories, ax=axes[1],
+        recurrent_phases, recurrent_gated_categories, ax=axes[1],
         title="Recurrent Thalamus Category Similarity"
     )
     
@@ -192,22 +208,35 @@ def compare_models(tokens, categories, task_ids, output_dir):
         
         # Extract phases from each iteration
         iteration_phases = []
+        iteration_categories = []
+        
         for i, thalamus_output in enumerate(intermediates['thalamus_outputs']):
             phases = thalamus_output[..., d_model:]
             iteration_phases.append(phases)
+            
+            # Get categories for this iteration
+            if 'token_indices' in intermediates and i < len(intermediates['token_indices']):
+                indices = intermediates['token_indices'][i]
+                iteration_cats = torch.zeros_like(indices)
+                for b in range(indices.shape[0]):
+                    iteration_cats[b] = torch.gather(categories[b], 0, indices[b])
+                iteration_categories.append(iteration_cats)
+            else:
+                # If indices aren't available, use standard categories as fallback
+                iteration_categories.append(standard_gated_categories)
         
         # Create multi-panel visualization
         num_iterations = len(iteration_phases)
         fig, axes = plt.subplots(2, num_iterations, figsize=(6 * num_iterations, 12))
         
-        for i, phases in enumerate(iteration_phases):
+        for i, (phases, cats) in enumerate(zip(iteration_phases, iteration_categories)):
             # Phase similarity matrix
             plot_phase_similarity_matrix(phases[0], ax=axes[0, i], 
                                       title=f"Iteration {i+1} Phase Similarity")
             
             # Intra vs inter category similarities
             plot_intra_inter_similarity(
-                phases, categories, ax=axes[1, i],
+                phases, cats, ax=axes[1, i],
                 title=f"Iteration {i+1} Category Similarity"
             )
         
@@ -230,7 +259,7 @@ def compare_models(tokens, categories, task_ids, output_dir):
     
     # Compare standard vs final recurrent phase vectors
     visualize_before_after_comparison(
-        standard_phases, recurrent_phases, categories,
+        standard_phases, recurrent_phases, standard_gated_categories,
         title="Standard vs Recurrent Phases"
     )
     plt.savefig(os.path.join(output_dir, f"standard_vs_recurrent_{timestamp}.png"))
