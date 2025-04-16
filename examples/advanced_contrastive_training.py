@@ -200,7 +200,12 @@ def visualize_phases(model, tokens, categories, output_dir, label=""):
     # Generate phase vectors
     with torch.no_grad():
         # Get task IDs (zeros for simplicity)
-        task_ids = torch.zeros(tokens.size(0), dtype=torch.long)
+        # Determine device from model parameters
+        device = next(model.parameters()).device
+        
+        # Move tokens and task_ids to the same device as the model
+        tokens = tokens.to(device)
+        task_ids = torch.zeros(tokens.size(0), dtype=torch.long, device=device)
         
         # Pass through thalamus - returns a tuple of (gated, topk_indices)
         gated_tuple = model.thalamus(tokens, task_ids)
@@ -213,9 +218,12 @@ def visualize_phases(model, tokens, categories, output_dir, label=""):
     # Create visualizations
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    # Move categories to the same device for consistent operations
+    categories = categories.to(device)
+    
     # 1. Phase similarity matrix
     fig, ax = plt.subplots(figsize=(10, 8))
-    plot_phase_similarity_matrix(phases[0], ax=ax, 
+    plot_phase_similarity_matrix(phases[0].cpu(), ax=ax, 
                                title=f"Phase Similarity Matrix ({label})")
     fig.savefig(os.path.join(output_dir, f"phase_similarity_{label}_{timestamp}.png"))
     plt.close(fig)
@@ -223,7 +231,7 @@ def visualize_phases(model, tokens, categories, output_dir, label=""):
     # 2. Intra vs Inter category similarities
     fig, ax = plt.subplots(figsize=(10, 6))
     ax, metrics = plot_intra_inter_similarity(
-        phases, categories, ax=ax,
+        phases.cpu(), categories.cpu(), ax=ax,
         title=f"Category Similarity Analysis ({label})"
     )
     fig.savefig(os.path.join(output_dir, f"category_similarity_{label}_{timestamp}.png"))
