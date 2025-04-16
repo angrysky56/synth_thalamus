@@ -245,7 +245,15 @@ This will generate visualizations comparing standard and enhanced workspace atte
 
 ```bash
 pip3 install ollama
+```
 
+# (with mxbai-embed-large or phi4-mini) 
+
+```bash
+ollama pull mxbai-embed-large:latest
+```
+
+```bash
 python examples/ollama_phase_demo.py
 ```
 
