@@ -308,14 +308,48 @@ python examples/ollama_phase_demo.py
 
 ![ollama phase demo](image-1.png)
 
+## Advanced Features
+
+### Feedback Loops
+
+The project now includes experimental support for feedback loops between the workspace and thalamus, inspired by biological thalamo-cortical circuits:
+
+- **WorkspaceToThalamusFeedback**: Enables the workspace to influence thalamus processing
+- **RecurrentThalamusWorkspace**: Creates a recurrent circuit that iteratively refines attended information
+- **HierarchicalThalamus**: Implements stacked thalamus layers with feedback connections
+- **CrossModalFeedback**: Enables information sharing between different modalities
+
+To try the feedback mechanism, run:
+
+```bash
+python examples/recurrent_thalamus_demo.py
+```
+
+This will demonstrate how feedback from the workspace back to the thalamus can refine attention over multiple iterations, leading to more coherent information selection.
+
+### Contrastive Learning
+
+The enhanced phase generator now supports contrastive learning to improve semantic differentiation in phase space:
+
+- **Hard Negative Mining**: Focuses contrastive learning on the most challenging examples
+- **Temperature Scheduling**: Dynamically adjusts the contrastive loss temperature parameter
+- **Adaptive Loss Weighting**: Balances task and contrastive objectives based on gradient statistics
+- **Stratified Batch Sampling**: Ensures balanced category representation for effective training
+
+To explore these advanced contrastive learning features, run:
+
+```bash
+python examples/advanced_contrastive_training.py
+```
+
 ## Future Work
 
-The current implementation serves as a foundation for exploring thalamic-inspired neural architectures. Future enhancements may include:
+While the project now includes many advanced features, there are still opportunities for further research:
 
 - Integration with reinforcement learning for adaptive salience adjustment
-- Hierarchical thalamus-like structures with multiple bottlenecks
+- Further development of hierarchical thalamus structures
 - More sophisticated phase encoding for recurrent processing
-- Cross-modal gating for multi-modal tasks
+- Extended cross-modal gating for complex multi-modal tasks
 
 ## Inspiration
 

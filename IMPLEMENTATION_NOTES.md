@@ -128,19 +128,117 @@ The implementation includes tests that verify:
 5. **Contrastive Learning**: Testing the contrastive loss for encouraging semantic similarity
 6. **End-to-End Integration**: Verifying that all components work correctly together
 
+## 3. Feedback Loop Implementation
+
+### Overview
+
+The feedback loop implementation creates a recurrent connection between the workspace and thalamus, enabling a more biologically plausible architecture that can refine its attention over multiple iterations.
+
+### Key Components
+
+1. **WorkspaceToThalamusFeedback**
+   - Creates a direct channel from workspace outputs back to thalamus inputs
+   - Uses attention to determine how feedback influences thalamus processing
+   - Includes a gating mechanism to control feedback strength
+
+2. **RecurrentThalamusWorkspace**
+   - Manages the iterative processing between thalamus and workspace
+   - Supports fixed or adaptive number of iterations
+   - Tracks intermediate states for analysis and visualization
+
+3. **HierarchicalThalamus**
+   - Implements a stacked architecture with multiple thalamus layers
+   - Each layer processes progressively more abstract features
+   - Includes optional feedback connections between layers
+
+4. **CrossModalFeedback**
+   - Enables information sharing between different modalities
+   - Creates a more integrated multi-modal processing system
+   - Uses attention and gating to control cross-modal influence
+
+### Implementation Details
+
+The `WorkspaceToThalamusFeedback` module takes the state of the workspace and generates a feedback signal that modifies the inputs to the thalamus:
+
+```python
+class WorkspaceToThalamusFeedback(nn.Module):
+    def __init__(self, workspace_dim, thalamus_dim, feedback_dim=64, 
+                 num_heads=4, dropout=0.1, use_gating=True):
+        # Initialize feedback components
+        # ...
+    
+    def forward(self, workspace_state, thalamus_inputs, return_attention=False):
+        # Generate feedback signal
+        feedback = self.workspace_projector(workspace_state)
+        
+        # Apply attention between feedback and thalamus inputs
+        attn_output, attn_weights = self.attention(
+            query=feedback, key=thalamus_inputs, value=thalamus_inputs)
+        
+        # Apply gated feedback
+        modified_inputs = thalamus_inputs + gate * (attn_output - feedback_expanded)
+        
+        return modified_inputs
+```
+
+The `RecurrentThalamusWorkspace` manages the iterative processing between thalamus and workspace:
+
+```python
+class RecurrentThalamusWorkspace(nn.Module):
+    def __init__(self, thalamus, workspace, feedback, max_iterations=3,
+                 adaptive_iterations=False, halt_threshold=0.05):
+        # Initialize components
+        # ...
+    
+    def forward(self, inputs, task_ids=None, return_intermediates=False):
+        # Recurrent processing loop
+        for i in range(self.max_iterations):
+            # Apply feedback if we have workspace state
+            if workspace_state is not None:
+                inputs_modified = self.feedback(workspace_state, inputs)
+            else:
+                inputs_modified = inputs
+            
+            # Process through thalamus and workspace
+            thalamus_output = self.thalamus(inputs_modified, task_ids)
+            workspace_output, pooled = self.workspace(thalamus_output)
+            
+            # Update workspace state
+            workspace_state = pooled
+            
+            # Check for early stopping if using adaptive iterations
+            # ...
+        
+        return workspace_output, pooled
+```
+
+### Biological Inspiration
+
+This implementation is closely aligned with the biological organization of thalamo-cortical circuits, which feature:
+
+- **Reciprocal connections**: The biological thalamus both sends information to and receives feedback from the cortex
+- **Iterative refinement**: Neural circuits engage in multiple cycles of processing
+- **Modulatory feedback**: Cortical feedback modulates thalamic relay neurons
+- **Hierarchical organization**: The biological thalamus has multiple nuclei at different levels of processing
+
+### Practical Applications
+
+The feedback loop implementation enables:
+
+1. **Attention Refinement**: Multiple iterations allow the system to progressively focus on the most relevant tokens
+2. **Information Integration**: Feedback helps integrate information across different parts of the input
+3. **Dynamic Processing**: The number of iterations can adapt to task difficulty
+4. **Cross-Modal Coordination**: Different modalities can influence each other's processing
+
 ## Future Directions
 
 Potential enhancements for future work:
 
 1. **Adaptive Phase Scale**: Making the phase scale parameter task-dependent or input-dependent
 2. **Alternative Similarity Metrics**: Exploring different ways to compute phase similarity
-3. **Feedback Integration**: Developing a feedback loop from the workspace back to the thalamus
-4. **Multiple Attention Modes**: Implementing different modes of attention based on phase relationships
-5. **Hierarchical Phase Generation**: Creating phase patterns at multiple levels of abstraction
-6. **Phase Propagation**: Developing mechanisms for phase patterns to evolve through time
-7. **Cross-Modal Phase Alignment**: Synchronizing phases across different modalities
-8. **Task-Adaptive Diversity**: Making the diversity parameter task-dependent
-9. **Reinforcement Learning Integration**: Using rewards to shape phase patterns
+3. **Multiple Attention Modes**: Implementing different modes of attention based on phase relationships
+4. **Task-Adaptive Diversity**: Making the diversity parameter task-dependent
+5. **Reinforcement Learning Integration**: Using rewards to shape phase patterns
 
 ## References
 
